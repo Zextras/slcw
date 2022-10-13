@@ -1,5 +1,6 @@
 package com.zextras.persistence.mapping.entries;
 
+import com.zextras.persistence.Filter;
 import com.zextras.persistence.mapping.SlcwProperty;
 import java.util.Collection;
 import java.util.HashMap;
@@ -12,38 +13,33 @@ public class SlcwEntry extends Entry {
 
   private final String baseDn;
   private String dn;
-  private String filter;
-  private SlcwProperty table;
+  private Filter filter;
   private SlcwProperty id = new SlcwProperty();
   private Map<String, SlcwProperty> fields = new HashMap<>();
   private Collection<?> attributes;
 
-  public SlcwEntry(String baseDn) {
+  public SlcwEntry(final String baseDn) {
     this.baseDn = baseDn;
   }
 
-  public void setId(SlcwProperty id) {
+  public void setId(final SlcwProperty id) {
     this.id = id;
   }
 
-  public void setFields(Map<String, SlcwProperty> fields) {
+  public void setFields(final Map<String, SlcwProperty> fields) {
     this.fields = fields;
   }
 
-  public void setDn(String dn) {
+  public void setDn(final String dn) {
     this.dn = dn;
   }
 
-  public void setAttributes(Collection<?> attributes) {
+  public void setAttributes(final Collection<?> attributes) {
     this.attributes = attributes;
   }
 
-  public void setFilter(String filter) {
+  public void setFilter(final Filter filter) {
     this.filter = filter;
-  }
-
-  public void setTable(SlcwProperty table) {
-    this.table = table;
   }
 
   public SlcwProperty getId() {
@@ -66,11 +62,7 @@ public class SlcwEntry extends Entry {
     return attributes;
   }
 
-  public String getFilter() {
+  public Filter getFilter() {
     return filter;
-  }
-
-  public SlcwProperty getTable() {
-    return table;
   }
 }

@@ -1,14 +1,16 @@
 package com.zextras;
 
 import com.unboundid.ldap.sdk.*;
+import com.zextras.conection.factories.LdapConnectionFactory;
 import com.zextras.operations.executors.LdapOperationExecutor;
 import com.zextras.operations.results.LdapOperationResult;
 import com.zextras.operations.results.OperationResult;
-import com.zextras.persistence.SlcwException;
+import com.zextras.persistence.Filter;
 import com.zextras.persistence.converters.SlcwConverter;
 import com.zextras.persistence.mapping.entries.SlcwEntry;
 import com.zextras.persistence.mapping.mappers.SlcwMapper;
 import com.zextras.utils.ObjectFactory;
+import java.util.Objects;
 
 /**
  * Main entrypoint for the library.
@@ -24,7 +26,7 @@ public class SlcwClient {
 
   /**
    * Creates a client that should be initialized with
-   * {@link #initialize(String, int, String, String, String) initialize} method.
+   * {@link #initialize(LdapConnectionFactory, String) initialize} method.
    */
   public SlcwClient() {
 
@@ -36,7 +38,7 @@ public class SlcwClient {
    * @param connection an opened connection to the server.
    * @param baseDn     the starting point on the server.
    */
-  public SlcwClient(LDAPConnection connection, String baseDn) {
+  public SlcwClient(final LDAPConnection connection, final String baseDn) {
     this.baseDn = baseDn;
     this.connection = connection;
   }
@@ -44,19 +46,58 @@ public class SlcwClient {
   /**
    * Authenticate a user and open the client connection, otherwise throws an exception.
    *
-   * @param host     a network layer host address.
-   * @param port     a port on a host that connects it to the storage system.
-   * @param bindDN   a Username used to connect to the server.
-   * @param password a secret word or phrase that allows access to the server.
-   * @param baseDn   the starting point on the server.
+   * @param factory {@link LdapConnectionFactory}.
    */
-  public void initialize(String host, int port, String bindDN, String password, String baseDn) {
+  public void initialize(final LdapConnectionFactory factory, final String baseDn) {
     this.baseDn = baseDn;
-    try {
-      connection = new LDAPConnection(host, port, bindDN, password);
-    } catch (LDAPException e) {
-      throw new SlcwException(e.getExceptionMessage());
-    }
+    this.connection = factory.openConnection();
+  }
+
+  /**
+   * Creates a new entry (record) in the structure.*
+   *
+   * @param object an object that you want to save in the structure.
+   * @param <T>    is a conventional letter that stands for "Type".
+   * @return a result of an adding operation. (ex. "0 (success)").
+   */
+  public <T> OperationResult add(final T object) {
+    final SlcwEntry entry = new SlcwEntry(baseDn);
+    mapper.map(object, entry);
+    entry.setAttributes(SlcwConverter.convertFieldsToAttributes(entry));
+
+    final LdapOperationExecutor executor = new LdapOperationExecutor(connection);
+    return executor.executeAddOperation(entry);
+  }
+
+  /**
+   * Alter the content of an entry (record) in the structure.
+   *
+   * @param object an object that you want to modify in the structure.
+   * @param <T>    is a conventional letter that stands for "Type".
+   * @return a result of an adding operation. (ex. "0 (success)").
+   */
+  public <T> OperationResult update(final T object) {
+    final SlcwEntry entry = new SlcwEntry(baseDn);
+    mapper.map(object, entry);
+    entry.setAttributes(SlcwConverter.convertFieldsToModifications(entry));
+
+    final LdapOperationExecutor executor = new LdapOperationExecutor(connection);
+    return executor.executeUpdateOperation(entry);
+  }
+
+  /**
+   * Remove an entry (record) from the structure.
+   *
+   * @param object an object that you want to delete from the structure.
+   * @param <T>    is a conventional letter that stands for "Type".
+   * @return a result of an adding operation. (ex. "0 (success)").
+   */
+  public <T> OperationResult delete(final T object) {
+    final SlcwEntry entry = new SlcwEntry(baseDn);
+    mapper.map(object, entry);
+
+    final LdapOperationExecutor executor = new LdapOperationExecutor(connection);
+    return executor.executeDeleteOperation(entry);
   }
 
   /**
@@ -69,64 +110,35 @@ public class SlcwClient {
    * @param <T>   is a conventional letter that stands for "Type".
    * @return an object of the given class.
    */
-  public <T> T getById(String id, Class<T> clazz) {
-    T object = ObjectFactory.newObject(clazz);
-    SlcwEntry entry = new SlcwEntry(baseDn);
+  public <T> T getById(final String id, final Class<T> clazz) {
+    final T object = ObjectFactory.newObject(clazz);
+    final SlcwEntry entry = new SlcwEntry(baseDn);
     entry.getId().setPropertyValue(id);
     mapper.map(object, entry);
 
-    LdapOperationExecutor executor = new LdapOperationExecutor(connection);
-    LdapOperationResult result = executor.executeGetOperation(entry);
-    entry.setAttributes(result.getAttributes());
+    final LdapOperationExecutor executor = new LdapOperationExecutor(connection);
+    final LdapOperationResult result = executor.executeGetOperation(entry);
+    entry.setAttributes(result.getEntries().get(0).getAttributes());
 
     mapper.map(entry, object);
     return object;
   }
 
   /**
-   * Creates a new entry (record) in the structure.*
+   * Counts the number of entries in the structure based on filter conditions.
    *
-   * @param object an object that you want to save in the structure.
-   * @param <T>    is a conventional letter that stands for "Type".
-   * @return a result of an adding operation. (ex. "0 (success)").
+   * @param filter {@link Filter}.
+   * @return number of matching entries.
    */
-  public <T> OperationResult add(T object) {
-    SlcwEntry entry = new SlcwEntry(baseDn);
-    mapper.map(object, entry);
-    entry.setAttributes(SlcwConverter.convertFieldsToAttributes(entry));
+  public long countBy(final Filter filter) {
+    if (filter.getDn() != null && !Objects.equals(filter.getDn(), baseDn)) {
+      filter.setDn(filter.getDn() + "," + baseDn);
+    } else {
+      filter.setDn(baseDn);
+    }
 
-    LdapOperationExecutor executor = new LdapOperationExecutor(connection);
-    return executor.executeAddOperation(entry);
-  }
-
-  /**
-   * Alter the content of an entry (record) in the structure.
-   *
-   * @param object an object that you want to modify in the structure.
-   * @param <T>    is a conventional letter that stands for "Type".
-   * @return a result of an adding operation. (ex. "0 (success)").
-   */
-  public <T> OperationResult update(T object) {
-    SlcwEntry entry = new SlcwEntry(baseDn);
-    mapper.map(object, entry);
-    entry.setAttributes(SlcwConverter.convertFieldsToModifications(entry));
-
-    LdapOperationExecutor executor = new LdapOperationExecutor(connection);
-    return executor.executeUpdateOperation(entry);
-  }
-
-  /**
-   * Remove an entry (record) from the structure.
-   *
-   * @param object an object that you want to delete from the structure.
-   * @param <T>    is a conventional letter that stands for "Type".
-   * @return a result of an adding operation. (ex. "0 (success)").
-   */
-  public <T> OperationResult delete(T object) {
-    SlcwEntry entry = new SlcwEntry(baseDn);
-    mapper.map(object, entry);
-
-    LdapOperationExecutor executor = new LdapOperationExecutor(connection);
-    return executor.executeDeleteOperation(entry);
+    final LdapOperationExecutor executor = new LdapOperationExecutor(connection);
+    final LdapOperationResult result = executor.executeCountOperation(filter);
+    return result.getEntriesReturned();
   }
 }
